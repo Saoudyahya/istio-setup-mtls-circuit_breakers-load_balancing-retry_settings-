@@ -1,6 +1,9 @@
 # Istio Traffic Management Guide
 
-![Istio Logo](https://istio.io/latest/img/logo.svg)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/istio/istio/master/logo/istio-bluelogo-whitebackground-unframed.svg" alt="Istio" width="200"/>
+  <img src="https://raw.githubusercontent.com/kubernetes/kubernetes/master/logo/logo.svg" alt="Kubernetes" width="200"/>
+</p>
 
 ## 📋 Table of Contents
 
@@ -25,12 +28,30 @@ This repository demonstrates two critical Istio traffic management patterns:
 
 ### Technologies Used
 
-| Technology | Purpose |
-|------------|---------|
-| ![Kubernetes](https://kubernetes.io/images/kubernetes-horizontal-color.png) | Container orchestration platform |
-| ![Istio](https://istio.io/latest/img/logo.svg) | Service mesh for traffic management |
-| Fortio | Load testing tool |
-| HTTPBin | HTTP testing service |
+<table>
+<tr>
+<td align="center" width="200">
+<img src="https://raw.githubusercontent.com/kubernetes/kubernetes/master/logo/logo.svg" alt="Kubernetes" width="80"/><br/>
+<b>Kubernetes</b><br/>
+Container orchestration
+</td>
+<td align="center" width="200">
+<img src="https://raw.githubusercontent.com/istio/istio/master/logo/istio-bluelogo-whitebackground-unframed.svg" alt="Istio" width="80"/><br/>
+<b>Istio</b><br/>
+Service mesh
+</td>
+<td align="center" width="200">
+<img src="https://raw.githubusercontent.com/fortio/fortio/master/docs/fortio-logo-color.png" alt="Fortio" width="80"/><br/>
+<b>Fortio</b><br/>
+Load testing
+</td>
+<td align="center" width="200">
+<img src="https://avatars.githubusercontent.com/u/12849578" alt="HTTPBin" width="80"/><br/>
+<b>HTTPBin</b><br/>
+HTTP testing service
+</td>
+</tr>
+</table>
 
 ---
 
