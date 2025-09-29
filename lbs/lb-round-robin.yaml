@@ -1,0 +1,10 @@
+# lb-round-robin.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: httpbin-lb-round-robin
+spec:
+  host: httpbin.default.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
