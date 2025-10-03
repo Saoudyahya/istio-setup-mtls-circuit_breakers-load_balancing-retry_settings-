@@ -1,556 +1,506 @@
-# Istio Traffic Management Guide
+# 🕸️ Istio Service Mesh Demo
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/istio/istio/master/logo/istio-bluelogo-whitebackground-unframed.svg" alt="Istio" width="200"/>
-  <img src="https://raw.githubusercontent.com/kubernetes/kubernetes/master/logo/logo.svg" alt="Kubernetes" width="200"/>
-</p>
+> **A comprehensive guide to deploying and testing Istio service mesh features including mTLS, Circuit Breakers, Load Balancing, and Retry Settings on Kubernetes Kind cluster**
+
+
+
 
 ## 📋 Table of Contents
 
-1. [Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Architecture](#architecture)
-4. [Setup Guide](#setup-guide)
-5. [Load Balancing Demo](#load-balancing-demo)
-6. [Circuit Breaker Demo](#circuit-breaker-demo)
-7. [Monitoring & Verification](#monitoring--verification)
-8. [Cleanup](#cleanup)
-9. [Troubleshooting](#troubleshooting)
-
----
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Features](#features)
+- [Usage](#usage)
+- [Troubleshooting](#troubleshooting)
+- [Cleanup](#cleanup)
 
 ## 🎯 Overview
 
-This repository demonstrates two critical Istio traffic management patterns:
+This project demonstrates Istio service mesh capabilities on a local Kubernetes Kind cluster. It includes practical examples of:
 
-- **Load Balancing**: Distribution of traffic across multiple service instances using Round Robin strategy
-- **Circuit Breaker**: Resilience pattern to prevent cascading failures through connection pooling and outlier detection
-
-### Technologies Used
-
-<table>
-<tr>
-<td align="center" width="200">
-<img src="https://raw.githubusercontent.com/kubernetes/kubernetes/master/logo/logo.svg" alt="Kubernetes" width="80"/><br/>
-<b>Kubernetes</b><br/>
-Container orchestration
-</td>
-<td align="center" width="200">
-<img src="https://raw.githubusercontent.com/istio/istio/master/logo/istio-bluelogo-whitebackground-unframed.svg" alt="Istio" width="80"/><br/>
-<b>Istio</b><br/>
-Service mesh
-</td>
-<td align="center" width="200">
-<img src="https://raw.githubusercontent.com/fortio/fortio/master/docs/fortio-logo-color.png" alt="Fortio" width="80"/><br/>
-<b>Fortio</b><br/>
-Load testing
-</td>
-<td align="center" width="200">
-<img src="https://avatars.githubusercontent.com/u/12849578" alt="HTTPBin" width="80"/><br/>
-<b>HTTPBin</b><br/>
-HTTP testing service
-</td>
-</tr>
-</table>
-
----
-
-## ✅ Prerequisites
-
-Before starting, ensure you have:
-
-- Kubernetes cluster (v1.20+)
-- Istio installed (v1.16+)
-- kubectl configured
-- Istio sidecar injection enabled in your namespace
-
-```bash
-# Enable Istio injection for default namespace
-kubectl label namespace default istio-injection=enabled
-
-# Verify Istio installation
-kubectl get pods -n istio-system
-```
-
----
+- ✅ **Mutual TLS (mTLS)** - Secure service-to-service communication
+- 🔄 **Circuit Breakers** - Prevent cascading failures
+- ⚖️ **Load Balancing** - Multiple strategies (Round Robin, Least Request, Random, Consistent Hash)
+- 🔁 **Retry Settings** - Automatic retry mechanisms
+- 📊 **Traffic Visualization** - Real-time monitoring with Kiali
 
 ## 🏗️ Architecture
 
-### Load Balancing Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Fortio Client                        │
-│                   (Load Generator)                       │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     │ HTTP Requests
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│              Istio Virtual Service                       │
-│           (Round Robin Load Balancer)                    │
-└─────┬──────────────┬──────────────┬─────────────────────┘
-      │              │              │
-      ▼              ▼              ▼
-┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-│HTTPBin v1│  │HTTPBin v1│  │HTTPBin v2│  │HTTPBin v2│
-│ Pod 1    │  │ Pod 2    │  │ Pod 1    │  │ Pod 2    │
-└──────────┘  └──────────┘  └──────────┘  └──────────┘
-```
-
-### Circuit Breaker Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Fortio Client                        │
-│              (Concurrent Requests: 20)                   │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│              Circuit Breaker Rules                       │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Connection Pool:                                  │  │
-│  │  - Max Connections: 10                           │  │
-│  │  - Max Pending Requests: 10                      │  │
-│  │  - Max Requests Per Connection: 2                │  │
-│  │                                                   │  │
-│  │ Outlier Detection:                               │  │
-│  │  - Consecutive 5xx Errors: 3                     │  │
-│  │  - Ejection Time: 30s                            │  │
-│  │  - Interval: 30s                                 │  │
-│  └──────────────────────────────────────────────────┘  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-      ┌──────────────┼──────────────┐
-      ▼              ▼              ▼
-  ✅ Allowed    ❌ Rejected    🔄 Retry
-  (10 conn)    (Overflow)    (Failed)
-      │
-      ▼
-┌──────────┐
-│ HTTPBin  │
-│ Service  │
-└──────────┘
+```mermaid
+graph TB
+    subgraph "Kubernetes Kind Cluster"
+        subgraph "Istio System Namespace"
+            Istiod[Istiod<br/>Control Plane]
+            Kiali[Kiali<br/>Observability]
+            Prometheus[Prometheus<br/>Metrics]
+            Grafana[Grafana<br/>Dashboards]
+        end
+        
+        subgraph "Default Namespace"
+            Fortio[Fortio<br/>Load Tester]
+            
+            subgraph "HTTPBin Service"
+                V1_1[httpbin-v1<br/>Pod 1]
+                V1_2[httpbin-v1<br/>Pod 2]
+                V2_1[httpbin-v2<br/>Pod 1]
+                V2_2[httpbin-v2<br/>Pod 2]
+            end
+            
+            Service[httpbin Service<br/>:8000]
+        end
+    end
+    
+    Fortio -->|HTTP Requests| Service
+    Service -->|Load Balanced| V1_1
+    Service -->|Load Balanced| V1_2
+    Service -->|Load Balanced| V2_1
+    Service -->|Load Balanced| V2_2
+    
+    Istiod -.->|Sidecar Injection| V1_1
+    Istiod -.->|Sidecar Injection| V1_2
+    Istiod -.->|Sidecar Injection| V2_1
+    Istiod -.->|Sidecar Injection| V2_2
+    Istiod -.->|Sidecar Injection| Fortio
+    
+    V1_1 -->|Metrics| Prometheus
+    V1_2 -->|Metrics| Prometheus
+    V2_1 -->|Metrics| Prometheus
+    V2_2 -->|Metrics| Prometheus
+    Fortio -->|Metrics| Prometheus
+    
+    Prometheus -->|Data| Kiali
+    Prometheus -->|Data| Grafana
+    
+    style Istiod fill:#466BB0
+    style Kiali fill:#3D3D3D
+    style Fortio fill:#FF6B35
+    style Service fill:#4ECDC4
 ```
 
----
+## 🔧 Prerequisites
 
-## 🚀 Setup Guide
+### Required Software
 
-### Step 1: Deploy Base Services
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Docker** | 20.10+ | Container runtime |
+| **Kind** | 0.17+ | Local Kubernetes cluster |
+| **kubectl** | 1.24+ | Kubernetes CLI |
+| **istioctl** | 1.20+ | Istio CLI |
 
-Deploy HTTPBin service and Fortio load testing client:
+### System Requirements
+
+- **RAM**: 8GB minimum (16GB recommended)
+- **CPU**: 4 cores minimum
+- **Disk**: 20GB free space
+- **OS**: Linux, macOS, or Windows (WSL2)
+
+## 📦 Installation
+
+### Step 1: Install Kind
 
 ```bash
-# Navigate to circuit breaker directory
-cd cb/
+# macOS
+brew install kind
 
-# Deploy services
-kubectl apply -f Deployment.yaml
+# Linux
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
 
-# Verify deployment
-kubectl get pods
-kubectl get svc
+# Windows (PowerShell)
+curl.exe -Lo kind-windows-amd64.exe https://kind.sigs.k8s.io/dl/v0.20.0/kind-windows-amd64
+Move-Item .\kind-windows-amd64.exe c:\windows\system32\kind.exe
 ```
 
-**Expected Output:**
-```
-NAME                       READY   STATUS    RESTARTS   AGE
-fortio-xxxxx              2/2     Running   0          1m
-httpbin-xxxxx             2/2     Running   0          1m
-```
-
-### Step 2: Wait for Pods to be Ready
+### Step 2: Create Kind Cluster
 
 ```bash
-# Watch pod status
-kubectl get pods -w
+# Create cluster
+kind create cluster --name istio-demo
 
-# Check if Istio sidecars are injected
-kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}'
+# Verify cluster
+kubectl cluster-info --context kind-istio-demo
+kubectl get nodes
 ```
 
-You should see both the main container and `istio-proxy` for each pod.
-
----
-
-## 🔄 Load Balancing Demo
-
-### Step 1: Deploy Multiple Versions
+### Step 3: Install Istio
 
 ```bash
-cd ../lbs/
+# Download Istio
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-1.*
+export PATH=$PWD/bin:$PATH
 
-# Deploy v1 and v2 with 2 replicas each
-kubectl apply -f httpbin-v1.yaml
+# Install Istio with demo profile
+istioctl install --set profile=demo -y
 
-# Verify 4 pods are running (2x v1, 2x v2)
-kubectl get pods -l app=httpbin
+# Verify installation
+kubectl get pods -n istio-system
+istioctl verify-install
 ```
 
-### Step 2: Apply Round Robin Load Balancing
+### Step 4: Install Observability Tools
 
 ```bash
-# Apply destination rule
-kubectl apply -f lb-round-robin.yaml
+# Install Kiali, Prometheus, Grafana, Jaeger
+kubectl apply -f samples/addons
 
-# Verify destination rule
-kubectl get destinationrule httpbin-lb-round-robin -o yaml
+# Wait for pods to be ready
+kubectl wait --for=condition=ready pod --all -n istio-system --timeout=300s
+
+# Access Kiali dashboard
+kubectl port-forward -n istio-system svc/kiali 20001:20001
+# Open: http://localhost:20001
 ```
 
-### Step 3: Generate Load
+### Step 5: Enable Sidecar Injection
 
 ```bash
-# Get Fortio pod name
-export FORTIO_POD=$(kubectl get pods -l app=fortio -o 'jsonpath={.items[0].metadata.name}')
+# Label default namespace for automatic sidecar injection
+kubectl label namespace default istio-injection=enabled
 
-# Send 100 requests
-kubectl exec "$FORTIO_POD" -c fortio -- /usr/bin/fortio load \
-  -c 1 -qps 0 -n 100 -loglevel Warning \
-  http://httpbin:8000/get
+# Verify label
+kubectl get namespace default --show-labels
 ```
 
-### Step 4: Verify Distribution
+## 🚀 Features
 
-Use the provided PowerShell script to check request distribution:
+### 1️⃣ Circuit Breaker
 
-```powershell
-# Run the monitoring script
-./LB-ROUND-ROBIN.sh
+Protects services from cascading failures by detecting and ejecting unhealthy instances.
+
+```mermaid
+sequenceDiagram
+    participant Client as Fortio Client
+    participant CB as Circuit Breaker
+    participant Service as HTTPBin Service
+    
+    Client->>CB: Request 1-9 (Normal)
+    CB->>Service: Forward Request
+    Service-->>CB: 200 OK
+    CB-->>Client: 200 OK
+    
+    Client->>CB: Request 10-12 (Trigger)
+    CB->>Service: Forward Request
+    Service-->>CB: 500 Error
+    CB->>CB: Count: 1, 2, 3 errors
+    
+    Note over CB: After 3 consecutive 5xx errors<br/>Circuit OPENS for 30s
+    
+    Client->>CB: Request 13+
+    CB-->>Client: 503 Service Unavailable
+    Note over CB: Circuit Breaker Active
+    
+    Note over CB: After 30s baseEjectionTime
+    CB->>CB: Circuit CLOSES
+    CB->>Service: Health Check
 ```
 
-**Expected Result:**
-Each pod should receive approximately 25% of requests (25 out of 100).
-
-```
---- Pod: httpbin-v1-xxxx ---
-Pod IP: 10.244.0.15
-Requests received: 25
-
---- Pod: httpbin-v1-yyyy ---
-Pod IP: 10.244.0.16
-Requests received: 25
-
---- Pod: httpbin-v2-xxxx ---
-Pod IP: 10.244.0.17
-Requests received: 25
-
---- Pod: httpbin-v2-yyyy ---
-Pod IP: 10.244.0.18
-Requests received: 25
-```
-
-### Load Balancing Flow Diagram
-
-```
-Request Flow (Round Robin):
-
-Request 1  ──────────────────────> HTTPBin v1 Pod 1
-Request 2  ──────────────────────> HTTPBin v1 Pod 2
-Request 3  ──────────────────────> HTTPBin v2 Pod 1
-Request 4  ──────────────────────> HTTPBin v2 Pod 2
-Request 5  ──────────────────────> HTTPBin v1 Pod 1 (cycle repeats)
-```
-
----
-
-## 🛡️ Circuit Breaker Demo
-
-### Step 1: Apply Circuit Breaker Rules
+**Deploy Circuit Breaker:**
 
 ```bash
-cd ../cb/
+# Deploy application
+kubectl apply -f cb/Deployment.yaml
 
-# Apply destination rule with circuit breaker
-kubectl apply -f DestinationRuleCB.yaml
+# Apply circuit breaker rules
+kubectl apply -f cb/DestinationRuleCB.yaml
 
-# Verify the rule
-kubectl describe destinationrule httpbin-circuit-breaker
+# Test circuit breaker
+bash cb/script.sh
 ```
 
-### Step 2: Test Normal Behavior
+**Configuration:**
+- `consecutive5xxErrors: 3` - Open circuit after 3 consecutive errors
+- `interval: 30s` - Check for errors every 30 seconds
+- `baseEjectionTime: 30s` - Keep instance ejected for 30 seconds
+- `maxEjectionPercent: 100` - Allow ejecting up to 100% of instances
+
+### 2️⃣ Load Balancing Strategies
+
+#### Round Robin (Default)
+
+Distributes requests evenly across all healthy instances.
+
+```mermaid
+graph LR
+    Client[Fortio Client] -->|Request 1| Pod1[httpbin-v1-1]
+    Client -->|Request 2| Pod2[httpbin-v1-2]
+    Client -->|Request 3| Pod3[httpbin-v2-1]
+    Client -->|Request 4| Pod4[httpbin-v2-2]
+    Client -->|Request 5| Pod1
+    
+    style Pod1 fill:#4ECDC4
+    style Pod2 fill:#4ECDC4
+    style Pod3 fill:#95E1D3
+    style Pod4 fill:#95E1D3
+```
+
+**Deploy:**
 
 ```bash
-# Single request test
-kubectl exec "$FORTIO_POD" -c fortio -- \
-  /usr/bin/fortio curl -quiet http://httpbin:8000/get
+# Deploy versioned services
+kubectl apply -f lbs/httpbin-v1.yaml
+
+# Apply round robin load balancing
+kubectl apply -f lbs/lb-round-robin.yaml
+
+# Test distribution
+kubectl exec -it deploy/fortio -c fortio -- \
+  fortio load -c 1 -n 100 -qps 10 http://httpbin:8000/get
 ```
 
-**Expected:** ✅ Request succeeds (200 OK)
+#### Other Strategies Available
 
-### Step 3: Trigger Circuit Breaker
+| Strategy | Use Case | Configuration |
+|----------|----------|---------------|
+| **LEAST_REQUEST** | Route to least busy pod | Best for varying workloads |
+| **RANDOM** | Random distribution | Simple, good for uniform loads |
+| **CONSISTENT_HASH** | Session affinity | Sticky sessions by header/cookie |
+| **WEIGHTED** | A/B testing | 80% to v1, 20% to v2 |
+
+### 3️⃣ Visualizing Traffic in Kiali
+
+```mermaid
+graph TB
+    subgraph "Kiali Dashboard"
+        NS[Select Namespace: default]
+        Graph[Graph View]
+        Display[Display Options]
+    end
+    
+    subgraph "Traffic Flow"
+        Fortio[fortio]
+        HTTP[httpbin]
+        V1[httpbin-v1<br/>25%]
+        V2[httpbin-v1<br/>25%]
+        V3[httpbin-v2<br/>25%]
+        V4[httpbin-v2<br/>25%]
+    end
+    
+    NS --> Graph
+    Display --> Graph
+    Graph -.->|Visualizes| Fortio
+    Fortio -->|100 req/s| HTTP
+    HTTP -->|Load Balanced| V1
+    HTTP -->|Load Balanced| V2
+    HTTP -->|Load Balanced| V3
+    HTTP -->|Load Balanced| V4
+    
+    style Fortio fill:#FF6B35
+    style HTTP fill:#4ECDC4
+    style V1 fill:#4ECDC4
+    style V2 fill:#4ECDC4
+    style V3 fill:#95E1D3
+    style V4 fill:#95E1D3
+```
+
+**Access Kiali:**
 
 ```bash
-# Run the test script
-bash script.sh
-```
-
-This script performs three tests:
-
-#### Test 1: Normal Request
-```bash
-kubectl exec "$FORTIO_POD" -c fortio -- \
-  /usr/bin/fortio curl -quiet http://httpbin:8000/get
-```
-
-#### Test 2: Concurrent Connections (Trigger Connection Pool Limit)
-```bash
-kubectl exec "$FORTIO_POD" -c fortio -- \
-  /usr/bin/fortio load -c 20 -qps 0 -n 200 -loglevel Warning \
-  http://httpbin:8000/get
-```
-
-**Parameters:**
-- `-c 20`: 20 concurrent connections (exceeds max of 10)
-- `-qps 0`: No rate limiting, send as fast as possible
-- `-n 200`: Total 200 requests
-
-#### Test 3: Delayed Responses (Trigger Timeout)
-```bash
-kubectl exec "$FORTIO_POD" -c fortio -- \
-  /usr/bin/fortio load -c 10 -qps 0 -n 100 -loglevel Warning \
-  http://httpbin:8000/delay/5
-```
-
-### Step 4: Analyze Results
-
-```bash
-# Check Istio proxy stats
-kubectl exec "$FORTIO_POD" -c istio-proxy -- \
-  pilot-agent request GET stats | grep -E 'upstream_rq_pending_overflow|upstream_rq_503'
-```
-
-**Key Metrics:**
-
-| Metric | Description | What to Look For |
-|--------|-------------|------------------|
-| `upstream_rq_pending_overflow` | Requests rejected due to connection pool overflow | Should be > 0 after test |
-| `upstream_rq_503` | 503 Service Unavailable responses | Indicates circuit breaker activation |
-| `upstream_cx_overflow` | Connection overflow count | Shows connection limit enforcement |
-
-### Circuit Breaker State Diagram
-
-```
-                    ┌─────────────┐
-                    │   CLOSED    │
-                    │  (Normal)   │
-                    └──────┬──────┘
-                           │
-              Errors < 3   │   Errors >= 3
-              ┌────────────┼────────────┐
-              │            │            │
-              ▼            ▼            ▼
-        ┌─────────┐   ┌─────────┐   ┌─────────┐
-        │ CLOSED  │   │  OPEN   │   │  OPEN   │
-        └─────────┘   │(Tripped)│   └─────────┘
-                      └────┬────┘
-                           │
-                      30s elapsed
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │ HALF-OPEN   │
-                    │  (Testing)  │
-                    └──────┬──────┘
-                           │
-              Success      │      Failure
-              ┌────────────┼────────────┐
-              ▼            │            ▼
-        ┌─────────┐        │      ┌─────────┐
-        │ CLOSED  │        │      │  OPEN   │
-        └─────────┘        │      └─────────┘
-```
-
----
-
-## 📊 Monitoring & Verification
-
-### Check Istio Metrics
-
-```bash
-# View circuit breaker metrics
-kubectl exec "$FORTIO_POD" -c istio-proxy -- \
-  curl -s localhost:15000/stats/prometheus | grep -E 'upstream_rq|upstream_cx'
-
-# Key metrics to monitor:
-# - istio_requests_total
-# - upstream_rq_pending_overflow
-# - upstream_rq_pending_active
-# - upstream_cx_active
-# - upstream_cx_overflow
-```
-
-### Visualize with Kiali (Optional)
-
-```bash
-# Port-forward Kiali dashboard
+# Port forward Kiali
 kubectl port-forward -n istio-system svc/kiali 20001:20001
 
-# Open browser to http://localhost:20001
+# Open browser: http://localhost:20001
+
+# In Kiali:
+# 1. Select namespace: default
+# 2. Go to Graph tab
+# 3. Select "Workload graph"
+# 4. Enable: Traffic Animation, Traffic Distribution, Service Nodes
+# 5. Set time range: Last 5 minutes
 ```
 
-### Grafana Dashboards (Optional)
+**Generate Traffic:**
 
 ```bash
-# Port-forward Grafana
-kubectl port-forward -n istio-system svc/grafana 3000:3000
-
-# Access at http://localhost:3000
-# Default credentials: admin/admin
+# Generate sustained traffic for visualization
+kubectl exec -it deploy/fortio -c fortio -- \
+  fortio load -c 2 -qps 10 -t 300s http://httpbin:8000/get
 ```
 
----
+## 💻 Usage
 
-## 🧹 Cleanup
-
-### Remove Load Balancing Setup
+### Testing Circuit Breaker
 
 ```bash
-kubectl delete -f lbs/httpbin-v1.yaml
-kubectl delete -f lbs/lb-round-robin.yaml
+# 1. Normal requests (should succeed)
+kubectl exec deploy/fortio -c fortio -- \
+  fortio curl http://httpbin:8000/get
+
+# 2. Trigger circuit breaker with concurrent requests
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 20 -qps 0 -n 200 http://httpbin:8000/get
+
+# 3. Check if circuit breaker activated
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 5 -n 50 http://httpbin:8000/get
+
+# Expected: Some requests will fail with 503 (circuit open)
 ```
 
-### Remove Circuit Breaker Setup
+### Testing Load Balancing
 
 ```bash
-kubectl delete -f cb/Deployment.yaml
-kubectl delete -f cb/DestinationRuleCB.yaml
+# 1. Send 100 requests
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 1 -n 100 http://httpbin:8000/get
+
+# 2. Check distribution (should be ~25% each pod)
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 4 -n 400 -qps 50 http://httpbin:8000/headers
+
+# 3. View in Kiali for visual confirmation
 ```
 
-### Complete Cleanup
+### Verifying Sidecar Injection
 
 ```bash
-# Delete all resources
-kubectl delete deployment httpbin httpbin-v1 httpbin-v2 fortio
-kubectl delete service httpbin fortio
-kubectl delete destinationrule --all
+# Check pods have 2/2 containers (app + istio-proxy)
+kubectl get pods
+
+# Expected output:
+# NAME                      READY   STATUS
+# fortio-xxx                2/2     Running
+# httpbin-v1-xxx            2/2     Running
+# httpbin-v2-xxx            2/2     Running
+
+# If showing 1/1, restart pods:
+kubectl delete pod --all
 ```
 
----
+### Advanced Testing
 
-## 🔧 Troubleshooting
-
-### Issue: Pods Not Ready
-
-**Symptoms:** Pods stuck in `ContainerCreating` or `CrashLoopBackOff`
-
-**Solutions:**
 ```bash
-# Check pod logs
+# Test different QPS rates
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 10 -qps 50 -t 60s http://httpbin:8000/get
+
+# Test with delays (for timeout testing)
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 5 -n 20 http://httpbin:8000/delay/2
+
+# Test POST requests
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 2 -n 50 -payload='{"test":"data"}' \
+  http://httpbin:8000/post
+```
+
+## 🔍 Troubleshooting
+
+### Issue: No Traffic in Kiali
+
+**Symptom:** Kiali graph shows no traffic or empty graph
+
+**Solution:**
+
+```bash
+# 1. Verify sidecar injection
+kubectl get pods
+# Should show 2/2 (not 1/1)
+
+# 2. Re-enable injection if needed
+kubectl label namespace default istio-injection=enabled --overwrite
+kubectl delete pod --all
+
+# 3. Verify Prometheus is running
+kubectl get pods -n istio-system | grep prometheus
+
+# 4. Generate new traffic
+kubectl exec -it deploy/fortio -c fortio -- \
+  fortio load -c 2 -qps 5 -t 120s http://httpbin:8000/get
+```
+
+### Issue: Circuit Breaker Not Working
+
+**Symptom:** All requests succeed, no 503 errors
+
+**Solution:**
+
+```bash
+# 1. Verify DestinationRule is applied
+kubectl get destinationrule httpbin-circuit-breaker -o yaml
+
+# 2. Check connection pool settings
+kubectl describe destinationrule httpbin-circuit-breaker
+
+# 3. Increase concurrent connections to trigger
+kubectl exec deploy/fortio -c fortio -- \
+  fortio load -c 30 -qps 0 -n 300 http://httpbin:8000/get
+```
+
+### Issue: Pods Not Starting
+
+**Symptom:** Pods stuck in `Pending` or `CrashLoopBackOff`
+
+**Solution:**
+
+```bash
+# 1. Check pod status
+kubectl describe pod <pod-name>
+
+# 2. Check logs
 kubectl logs <pod-name> -c httpbin
 kubectl logs <pod-name> -c istio-proxy
 
-# Check events
-kubectl describe pod <pod-name>
-
-# Verify Istio injection
-kubectl get namespace -L istio-injection
+# 3. Verify Kind cluster resources
+docker stats
 ```
 
-### Issue: Istio Sidecar Not Injected
+### Issue: Port Forward Fails
 
-**Symptoms:** Only 1/1 containers ready instead of 2/2
+**Symptom:** Cannot access Kiali dashboard
 
-**Solutions:**
+**Solution:**
+
 ```bash
-# Enable injection
-kubectl label namespace default istio-injection=enabled
+# 1. Verify Kiali service exists
+kubectl get svc -n istio-system kiali
 
-# Restart deployments
-kubectl rollout restart deployment httpbin fortio
+# 2. Try different port
+kubectl port-forward -n istio-system svc/kiali 8080:20001
+
+# 3. Check if port is already in use
+lsof -i :20001  # Linux/macOS
+netstat -ano | findstr :20001  # Windows
 ```
 
-### Issue: Circuit Breaker Not Triggering
+## 🧹 Cleanup
 
-**Symptoms:** No 503 errors during load test
-
-**Solutions:**
 ```bash
-# Verify destination rule is applied
-kubectl get destinationrule httpbin-circuit-breaker -o yaml
+# Delete deployments
+kubectl delete -f cb/
+kubectl delete -f lbs/
 
-# Check connection pool settings
-kubectl describe destinationrule httpbin-circuit-breaker
+# Delete Istio
+istioctl uninstall --purge -y
+kubectl delete namespace istio-system
 
-# Increase concurrent connections in test
-# Change -c value to exceed maxConnections
+# Delete Kind cluster
+kind delete cluster --name istio-demo
 ```
-
-### Issue: Load Not Distributed Evenly
-
-**Symptoms:** Some pods receive significantly more requests
-
-**Solutions:**
-```bash
-# Verify all pods are ready
-kubectl get pods -l app=httpbin
-
-# Check service endpoints
-kubectl get endpoints httpbin
-
-# Verify destination rule
-kubectl get destinationrule httpbin-lb-round-robin -o yaml
-
-# Wait longer for distribution to stabilize (send 500+ requests)
-```
-
----
 
 ## 📚 Additional Resources
 
 - [Istio Documentation](https://istio.io/latest/docs/)
-- [Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/)
-- [Circuit Breaking](https://istio.io/latest/docs/tasks/traffic-management/circuit-breaking/)
-- [Load Balancing Options](https://istio.io/latest/docs/reference/config/networking/destination-rule/#LoadBalancerSettings)
+- [Kiali Documentation](https://kiali.io/docs/)
 - [Fortio Documentation](https://github.com/fortio/fortio)
+- [Kind Documentation](https://kind.sigs.k8s.io/)
 
----
+## 🤝 Contributing
 
-## 📝 Configuration Reference
-
-### Circuit Breaker Parameters
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `maxConnections` | 10 | Maximum number of HTTP1/TCP connections |
-| `http1MaxPendingRequests` | 10 | Maximum pending HTTP requests |
-| `maxRequestsPerConnection` | 2 | Maximum requests per connection |
-| `maxRetries` | 3 | Maximum retry attempts |
-| `consecutive5xxErrors` | 3 | Errors before ejection |
-| `interval` | 30s | Analysis interval |
-| `baseEjectionTime` | 30s | Minimum ejection duration |
-| `maxEjectionPercent` | 100 | Maximum percentage of hosts that can be ejected |
-
-### Load Balancer Algorithms
-
-| Algorithm | Use Case |
-|-----------|----------|
-| `ROUND_ROBIN` | Equal distribution across all instances |
-| `LEAST_REQUEST` | Send to instance with fewest active requests |
-| `RANDOM` | Random selection |
-| `PASSTHROUGH` | Forward to original destination |
-
----
-
-## 🎓 Learning Outcomes
-
-After completing this guide, you will understand:
-
-✅ How to configure Istio DestinationRules  
-✅ Load balancing strategies in service mesh  
-✅ Circuit breaker patterns for resilience  
-✅ Connection pool management  
-✅ Outlier detection and pod ejection  
-✅ Load testing with Fortio  
-✅ Monitoring Istio traffic metrics  
-
----
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is provided as-is for educational purposes.
+This project is open source and available under the MIT License.
 
 ---
 
-**Happy Service Meshing! 🚀**
+**Made with ❤️ for learning Istio Service Mesh**
+
+![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Istio](https://img.shields.io/badge/istio-%23466BB0.svg?style=for-the-badge&logo=istio&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
